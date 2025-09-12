@@ -94,11 +94,13 @@ def update_record_field(app_token: str, table_id: str, record_id: str, field_id:
         "fields": {field_id: value},
     }
     data = http_request(
-        "PATCH",
+        # Feishu Bitable uses PUT for updating a record
+        "PUT",
         url,
         headers={
             "Authorization": f"Bearer {tenant_token}",
-            # Some endpoints also accept X-Field-Id-Type header, but using body keys + query is enough
+            # Explicitly tell API that we are using field IDs in the payload
+            "X-Field-Id-Type": "field_id",
         },
         data=payload,
     )
@@ -149,6 +151,12 @@ def main():
         print(f"Record {i+1}: id={rid}, fields_keys={list(fields.keys())}")
 
     # Write dummy data to the specified column for all records
+    # Optional: limit number of updates for safe testing
+    try:
+        max_updates = int(os.environ.get("MAX_UPDATES", "0"))
+    except ValueError:
+        max_updates = 0
+
     print(f"Updating field {target_field_id} with dummy values ...")
     updated = 0
     failed = 0
@@ -169,9 +177,12 @@ def main():
             # Continue updating others
             continue
 
+        if max_updates and updated >= max_updates:
+            print(f"Reached MAX_UPDATES={max_updates}, stopping early.")
+            break
+
     print(f"Done. Updated={updated}, Failed={failed}")
 
 
 if __name__ == "__main__":
     main()
-
