@@ -33,7 +33,17 @@ def http_request(method: str, url: str, headers: dict = None, data: dict | None 
             err_text = e.read().decode("utf-8")
         except Exception:
             err_text = str(e)
-        raise RuntimeError(f"HTTP {e.code} {e.reason}: {err_text}")
+        # Add hint for common Bitable 403 (91403) permission issues
+        if e.code == 403:
+            hint = (
+                "\nHint: 403/91403 often means the app lacks write permissions. "
+                "Ensure: (1) the app has 'bitable:record:write' scope and is re-installed, "
+                "(2) the app is added to the base with read-write permission, and "
+                "(3) the target field allows app write (or app write scope is set to all fields)."
+            )
+        else:
+            hint = ""
+        raise RuntimeError(f"HTTP {e.code} {e.reason}: {err_text}{hint}")
 
 
 def get_tenant_access_token(app_id: str, app_secret: str) -> str:
@@ -88,7 +98,11 @@ def list_records(app_token: str, table_id: str, tenant_token: str, page_size: in
 
 
 def update_record_field(app_token: str, table_id: str, record_id: str, field_id: str, value, tenant_token: str):
-    url = f"{FEISHU_BASE}/open-apis/bitable/v1/apps/{urllib.parse.quote(app_token)}/tables/{urllib.parse.quote(table_id)}/records/{urllib.parse.quote(record_id)}"
+    # Use field_id_type=field_id so payload keys are treated as field IDs
+    url = (
+        f"{FEISHU_BASE}/open-apis/bitable/v1/apps/{urllib.parse.quote(app_token)}"
+        f"/tables/{urllib.parse.quote(table_id)}/records/{urllib.parse.quote(record_id)}?field_id_type=field_id"
+    )
     payload = {
         # Ensure the server interprets keys as field IDs
         "fields": {field_id: value},
@@ -99,8 +113,6 @@ def update_record_field(app_token: str, table_id: str, record_id: str, field_id:
         url,
         headers={
             "Authorization": f"Bearer {tenant_token}",
-            # Explicitly tell API that we are using field IDs in the payload
-            "X-Field-Id-Type": "field_id",
         },
         data=payload,
     )
