@@ -6,6 +6,14 @@ from typing import Dict, List, Optional
 import lark_oapi as lark
 from lark_oapi.api.bitable.v1 import *
 
+# 导入App Token管理器
+try:
+    from app_token import FeishuAppTokenManager, get_app_token_from_env
+except ImportError:
+    print("警告: 无法导入app_token模块，将使用传统User Token方式")
+    FeishuAppTokenManager = None
+    get_app_token_from_env = None
+
 
 # 从 Akshare 导出的 CSV 读取 {名称: 最新价} 映射
 def load_name_price_from_csv(csv_path: str) -> Dict[str, float]:
@@ -110,16 +118,60 @@ def main():
     app_token = os.getenv("APP_TOKEN", "U3iYbe8cGaBrLEso6jMctMVgnVb")
     table_id = os.getenv("TABLE_ID", "tbl29O0osz3dn74L")
 
-    # 统一请求选项（优先从环境变量读取 user_access_token）
-    user_access_token = os.getenv(
-        "USER_ACCESS_TOKEN",
-        "u-cmskeyx6591byAdcRjQIiO11hVjl052jWE00kk0ww914",
-    )
-    option = (
-        lark.RequestOption.builder()
-        .user_access_token(user_access_token)
-        .build()
-    )
+    # 优先使用App Access Token，若不可用则回退到User Access Token
+    access_token = None
+    use_app_token = False
+
+    # 方案1: 直接使用环境变量中的APP_ACCESS_TOKEN
+    if get_app_token_from_env:
+        preset_app_token = get_app_token_from_env()
+        if preset_app_token:
+            access_token = preset_app_token
+            use_app_token = True
+            lark.logger.info("使用预设的App Access Token")
+
+    # 方案2: 动态获取App Access Token（如果方案1未成功且有相关配置）
+    if not access_token and FeishuAppTokenManager:
+        app_id = os.getenv("APP_ID")
+        app_secret = os.getenv("APP_SECRET")
+        if app_id and app_secret:
+            try:
+                redis_host = os.getenv("REDIS_HOST", "localhost")
+                redis_port = int(os.getenv("REDIS_PORT", "6379"))
+                token_manager = FeishuAppTokenManager(app_id, app_secret, redis_host, redis_port)
+                access_token = token_manager.get_app_access_token()
+                use_app_token = True
+                lark.logger.info("成功获取动态App Access Token")
+            except Exception as e:
+                lark.logger.warning(f"获取App Access Token失败: {e}")
+
+    # 方案3: 回退到User Access Token
+    if not access_token:
+        access_token = os.getenv(
+            "USER_ACCESS_TOKEN",
+            "u-cmskeyx6591byAdcRjQIiO11hVjl052jWE00kk0ww914",
+        )
+        use_app_token = False
+        lark.logger.warning("回退到User Access Token方式")
+
+    # 构建请求选项
+    if use_app_token:
+        # 尝试使用tenant_access_token（推荐用于多维表格操作）
+        option = (
+            lark.RequestOption.builder()
+            .tenant_access_token(access_token)
+            .build()
+        )
+        lark.logger.info(f"使用tenant_access_token: {access_token[:15]}...")
+    else:
+        option = (
+            lark.RequestOption.builder()
+            .user_access_token(access_token)
+            .build()
+        )
+        lark.logger.info(f"使用user_access_token: {access_token[:15]}...")
+
+    lark.logger.info(f"使用Token类型: {'App Access Token' if use_app_token else 'User Access Token'}")
 
     def resolve_field_name_by_id(client: lark.Client, app_token: str, table_id: str, field_id: str) -> Optional[str]:
         try:

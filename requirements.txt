@@ -1,2 +1,4 @@
 lark-oapi==1.4.22
 akshare
+redis
+requests
