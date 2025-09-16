@@ -46,6 +46,15 @@ python scripts/main.py
 1. 获取股票价格数据
 2. 更新飞书多维表格
 
+### 自动Token刷新更新（推荐）
+```bash
+python scripts/auto_refresh_token.py
+```
+这个命令会：
+1. 自动检测Token是否过期
+2. 如果过期，自动获取新Token并更新.env文件
+3. 执行完整的价格更新流程
+
 ### 单独获取股票数据
 ```bash
 python scripts/get_stock_price.py  
@@ -54,6 +63,11 @@ python scripts/get_stock_price.py
 ### 单独更新飞书表格
 ```bash
 python scripts/update_all.py
+```
+
+### 手动获取新Token
+```bash
+python tanent_access_token.py
 ```
 
 ### 测试App Token功能
@@ -180,6 +194,29 @@ python scripts/app_token.py
 python scripts/update_all.py
 ```
 
+## 调试和测试命令
+
+### 权限和凭证测试
+```bash
+# 检查应用权限状态
+python scripts/check_app_permissions.py
+
+# 测试凭证配置
+python scripts/test_credentials.py
+
+# 调试权限问题
+python scripts/debug_permissions.py
+
+# 验证更新功能
+python scripts/verify_update.py
+```
+
+### 多维表格操作测试
+```bash
+# 测试多维表格更新功能
+python scripts/test_bitable_update.py
+```
+
 ## 开发注意事项
 
 1. **数据文件路径**：CSV文件名为 `data/'all_stock.csv`，包含单引号
@@ -189,3 +226,22 @@ python scripts/update_all.py
 5. **Python版本**：项目使用Python 3.10+
 6. **时区设置**：GitHub Actions 使用 Asia/Shanghai 时区
 7. **模块冲突**：避免文件名与Python内置模块冲突（如`token.py`已重命名为`feishu_token.py`）
+
+## 脚本说明
+
+### 核心功能脚本
+- `scripts/main.py` (29行) - 主入口，协调数据获取和更新流程
+- `scripts/get_stock_price.py` (3行) - 简单的AkShare数据获取脚本
+- `scripts/update_all.py` (238行) - 主要的飞书API集成逻辑
+
+### Token管理脚本
+- `scripts/app_token.py` (214行) - App Access Token管理，支持Redis缓存
+- `scripts/feishu_token.py` (183行) - User Access Token管理（备用）
+
+### 测试和调试脚本
+- `scripts/test_token.py` (179行) - Token功能测试
+- `scripts/check_app_permissions.py` (149行) - 应用权限检查
+- `scripts/test_credentials.py` (149行) - 凭证配置测试
+- `scripts/debug_permissions.py` (153行) - 权限问题调试
+- `scripts/verify_update.py` (176行) - 更新功能验证
+- `scripts/test_bitable_update.py` (117行) - 多维表格操作测试

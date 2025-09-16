@@ -15,22 +15,25 @@ except ImportError:
     get_app_token_from_env = None
 
 
-# 从 Akshare 导出的 CSV 读取 {名称: 最新价} 映射
+# 从新的CSV格式读取 {股票名称: 收盘价} 映射
 def load_name_price_from_csv(csv_path: str) -> Dict[str, float]:
     name_to_price: Dict[str, float] = {}
     with open(csv_path, "r", encoding="utf-8", newline="") as f:
         reader = csv.DictReader(f)
         for row in reader:
-            name = row.get("名称")
-            price_text = row.get("最新价")
+            # 新格式使用"股票名称"和"收盘"字段
+            name = row.get("股票名称")
+            price_text = row.get("收盘")
             if not name or price_text is None:
                 continue
             try:
                 # 强制转换为 float，过滤异常值
                 price = float(str(price_text).strip())
                 name_to_price[name] = price
+                print(f"解析股票价格: {name} = {price}")
             except ValueError:
                 # 跳过无法解析的价格
+                print(f"跳过无效价格: {name} = {price_text}")
                 continue
     return name_to_price
 
@@ -122,28 +125,32 @@ def main():
     access_token = None
     use_app_token = False
 
-    # 方案1: 直接使用环境变量中的APP_ACCESS_TOKEN
-    if get_app_token_from_env:
-        preset_app_token = get_app_token_from_env()
-        if preset_app_token:
-            access_token = preset_app_token
-            use_app_token = True
-            lark.logger.info("使用预设的App Access Token")
-
-    # 方案2: 动态获取App Access Token（如果方案1未成功且有相关配置）
-    if not access_token and FeishuAppTokenManager:
+    # 方案1: 动态获取App Access Token（优先方案）
+    if FeishuAppTokenManager:
         app_id = os.getenv("APP_ID")
         app_secret = os.getenv("APP_SECRET")
         if app_id and app_secret:
             try:
+                print(f"[INFO] 正在动态获取App Access Token (APP_ID: {app_id[:8]}...)")
                 redis_host = os.getenv("REDIS_HOST", "localhost")
                 redis_port = int(os.getenv("REDIS_PORT", "6379"))
                 token_manager = FeishuAppTokenManager(app_id, app_secret, redis_host, redis_port)
                 access_token = token_manager.get_app_access_token()
                 use_app_token = True
                 lark.logger.info("成功获取动态App Access Token")
+                print(f"[SUCCESS] 获取到新的App Access Token: {access_token[:20]}...")
             except Exception as e:
+                print(f"[ERROR] 获取App Access Token失败: {e}")
                 lark.logger.warning(f"获取App Access Token失败: {e}")
+
+    # 方案2: 使用环境变量中的APP_ACCESS_TOKEN（备用）
+    if not access_token and get_app_token_from_env:
+        preset_app_token = get_app_token_from_env()
+        if preset_app_token:
+            access_token = preset_app_token
+            use_app_token = True
+            lark.logger.info("使用预设的App Access Token")
+            print(f"[INFO] 使用预设App Access Token: {access_token[:20]}...")
 
     # 方案3: 回退到User Access Token
     if not access_token:
